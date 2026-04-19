@@ -1,0 +1,24 @@
+# Firebase credentials
+firebase_key.json
+
+# WiFi and API keys
+config.h
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Machine learning models
+*.pkl
+*.h5
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Arduino build files
+*.hex
+*.elf
+
+firebase_key.json
+phase4_backend/firebase_key.json

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ECG Monitor — Real-Time Dashboard</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d1117; color: #e6edf3; font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+
+  header {
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    padding: 14px 24px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  header h1 { font-size: 1.2rem; font-weight: 600; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #3fb950; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 16px;
+    padding: 20px;
+    max-width: 1300px; margin: 0 auto;
+  }
+
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 18px;
+  }
+  .card h2 { font-size: 0.78rem; color: #8b949e; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
+
+  /* ECG card spans all 3 cols */
+  .card-ecg { grid-column: 1 / -1; }
+  /* Alerts spans all 3 cols */
+  .card-alerts { grid-column: 1 / -1; }
+
+  /* BPM gauge */
+  .bpm-value { font-size: 4rem; font-weight: 700; color: #58a6ff; line-height: 1; }
+  .bpm-unit  { font-size: 1rem; color: #8b949e; margin-top: 4px; }
+  .bpm-bar-bg { height: 6px; background: #21262d; border-radius: 3px; margin-top: 14px; }
+  .bpm-bar    { height: 6px; border-radius: 3px; background: #3fb950; transition: width .5s, background .5s; }
+
+  /* Beat badge */
+  .beat-badge {
+    font-size: 3.5rem; font-weight: 800;
+    width: 90px; height: 90px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 8px auto;
+    transition: background .4s, color .4s;
+  }
+  .beat-N { background: #1f3a1f; color: #3fb950; }
+  .beat-S { background: #3a2f00; color: #d29922; }
+  .beat-V { background: #3a1f1f; color: #f85149; }
+  .beat-label { text-align: center; font-size: 0.85rem; color: #8b949e; margin-top: 6px; }
+
+  /* Status */
+  .status-pill {
+    display: inline-block;
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-top: 8px;
+    transition: background .4s;
+  }
+  .status-normal { background: #1f3a1f; color: #3fb950; }
+  .status-alert  { background: #3a1f1f; color: #f85149; animation: blink .6s step-end infinite; }
+  @keyframes blink { 50%{opacity:0} }
+
+  /* ECG chart */
+  #ecgChart { width: 100% !important; height: 160px !important; }
+
+  /* Alerts table */
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th { color: #8b949e; font-weight: 500; text-align: left; padding: 6px 10px; border-bottom: 1px solid #21262d; }
+  td { padding: 7px 10px; border-bottom: 1px solid #21262d; }
+  tr:last-child td { border: none; }
+  .tag-V { color: #f85149; font-weight: 700; }
+  .tag-S { color: #d29922; font-weight: 700; }
+  .tag-N { color: #3fb950; }
+
+  .conn-status { font-size: 0.75rem; color: #8b949e; margin-left: auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="dot" id="connDot"></div>
+  <h1>ECG Real-Time Monitor</h1>
+  <span class="conn-status" id="connLabel">Connecting…</span>
+</header>
+
+<div class="grid">
+
+  <!-- ECG Waveform -->
+  <div class="card card-ecg">
+    <h2>Live ECG Waveform</h2>
+    <canvas id="ecgChart"></canvas>
+  </div>
+
+  <!-- BPM -->
+  <div class="card">
+    <h2>Heart Rate</h2>
+    <div class="bpm-value" id="bpmVal">--</div>
+    <div class="bpm-unit">BPM</div>
+    <div class="bpm-bar-bg"><div class="bpm-bar" id="bpmBar" style="width:50%"></div></div>
+  </div>
+
+  <!-- Beat Class -->
+  <div class="card" style="text-align:center">
+    <h2>Beat Classification</h2>
+    <div class="beat-badge beat-N" id="beatBadge">N</div>
+    <div class="beat-label" id="beatLabel">Normal</div>
+  </div>
+
+  <!-- Status -->
+  <div class="card" style="text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center">
+    <h2>System Status</h2>
+    <div class="status-pill status-normal" id="statusPill">Normal</div>
+    <div style="margin-top:14px; font-size:0.8rem; color:#8b949e" id="lastUpdate">--</div>
+  </div>
+
+  <!-- Alert History -->
+  <div class="card card-alerts">
+    <h2>Alert History</h2>
+    <table>
+      <thead><tr><th>Time</th><th>Type</th><th>BPM</th></tr></thead>
+      <tbody id="alertBody"><tr><td colspan="3" style="color:#8b949e">No alerts yet.</td></tr></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+// ── Firebase config ───────────────────────────────────────────
+const firebaseConfig = {
+  apiKey:            "AIzaSyCJAiBHTzGqbMHMiUiYHTy_KHdp-j8bCBQ",   // from Firebase console → Project Settings → General
+  authDomain:        "ecg-monitor-c1058.firebaseapp.com",
+  databaseURL:       "https://ecg-monitor-c1058-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "ecg-monitor-c1058",
+  storageBucket:     "ecg-monitor-c1058.appspot.com",
+  messagingSenderId: "628906224990",   // ← replace from Firebase console
+  appId:             "ecg-monitor-c1058"       // ← replace from Firebase console
+};
+
+firebase.initializeApp(firebaseConfig);
+const rtdb = firebase.database();
+
+// ── ECG Chart ─────────────────────────────────────────────────
+const MAX_PTS = 360;  // 1 second
+const labels  = Array.from({length: MAX_PTS}, (_,i) => i);
+const ecgData = new Array(MAX_PTS).fill(2048);
+
+const ctx = document.getElementById('ecgChart').getContext('2d');
+const ecgChart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [{
+      data: ecgData,
+      borderColor: '#58a6ff',
+      borderWidth: 1.5,
+      pointRadius: 0,
+      tension: 0.2,
+      fill: false
+    }]
+  },
+  options: {
+    animation: false,
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { display: false },
+      y: {
+        display: true,
+        grid: { color: '#21262d' },
+        ticks: { color: '#8b949e', font: { size: 10 } }
+      }
+    }
+  }
+});
+
+// ── UI Helpers ────────────────────────────────────────────────
+const BEAT_LABELS = { N: 'Normal', S: 'Supraventricular', V: 'Ventricular Ectopic' };
+
+function updateBPM(bpm) {
+  document.getElementById('bpmVal').textContent = bpm ? bpm.toFixed(1) : '--';
+  const pct = Math.min(100, Math.max(0, ((bpm - 30) / 170) * 100));
+  const bar  = document.getElementById('bpmBar');
+  bar.style.width = pct + '%';
+  bar.style.background = bpm < 50 || bpm > 130 ? '#f85149' : '#3fb950';
+}
+
+function updateBeat(cls) {
+  const badge = document.getElementById('beatBadge');
+  badge.textContent = cls || 'N';
+  badge.className   = `beat-badge beat-${cls || 'N'}`;
+  document.getElementById('beatLabel').textContent = BEAT_LABELS[cls] || '—';
+}
+
+function updateStatus(status) {
+  const pill = document.getElementById('statusPill');
+  const isAlert = status === 'ALERT';
+  pill.textContent = isAlert ? '⚠ ALERT' : '✓ Normal';
+  pill.className   = `status-pill ${isAlert ? 'status-alert' : 'status-normal'}`;
+}
+
+function updateWaveform(arr) {
+  if (!arr || !arr.length) return;
+  const slice = arr.slice(-MAX_PTS);
+  for (let i = 0; i < MAX_PTS; i++) {
+    ecgData[i] = slice[i] !== undefined ? slice[i] : 2048;
+  }
+  ecgChart.update('none');
+}
+
+// ── Firebase listeners ────────────────────────────────────────
+rtdb.ref('/ecg_live').on('value', snap => {
+  const d = snap.val();
+  if (!d) return;
+
+  updateBPM(d.bpm);
+  updateBeat(d.beat_class);
+  updateStatus(d.status);
+  updateWaveform(d.waveform);
+
+  const dot = document.getElementById('connDot');
+  dot.style.background = '#3fb950';
+  document.getElementById('connLabel').textContent = 'Connected';
+  document.getElementById('lastUpdate').textContent =
+    'Last update: ' + new Date(d.ts).toLocaleTimeString();
+}, err => {
+  document.getElementById('connDot').style.background = '#f85149';
+  document.getElementById('connLabel').textContent = 'Disconnected';
+  console.error(err);
+});
+
+// ── Alert history ─────────────────────────────────────────────
+rtdb.ref('/alerts').limitToLast(20).on('value', snap => {
+  const tbody = document.getElementById('alertBody');
+  const val   = snap.val();
+  if (!val) { tbody.innerHTML = '<tr><td colspan="3" style="color:#8b949e">No alerts yet.</td></tr>'; return; }
+
+  const rows = Object.values(val).reverse();
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.time || '--'}</td>
+      <td class="tag-${r.type?.[0] || 'N'}">${r.type || '--'}</td>
+      <td>${r.bpm ? r.bpm.toFixed(1) : '--'}</td>
+    </tr>
+  `).join('');
+});
+</script>
+</body>
+</html>
