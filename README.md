@@ -3,6 +3,7 @@
 End-to-end arrhythmia detection using **AD8232 + ESP32 + Machine Learning + IoT dashboard + Telegram alerts**
 
 ---
+<img width="2378" height="1283" alt="image" src="https://github.com/user-attachments/assets/9624933e-d354-4465-b97a-53c3c95b1143" />
 
 ## 📌 Overview
 
@@ -21,6 +22,7 @@ AD8232 → ESP32 → Python Backend → Firebase → Web Dashboard
 - **Latency:** ~22–33 ms (real-time pipeline)
 
 ---
+<img width="2048" height="1358" alt="image" src="https://github.com/user-attachments/assets/caedf97d-5dd5-4960-9d2a-f7e401b622dc" />
 
 ## 🧠 Key Features
 
@@ -69,6 +71,7 @@ ecg_project/
 | ESP32 | Signal processing + Wi-Fi |
 | Electrodes | RA, LA, RL placement |
 | Buzzer + LEDs | Local alerts |
+<img width="2114" height="947" alt="image" src="https://github.com/user-attachments/assets/ae0dccf3-9e81-433b-8c1a-423e23e883f7" />
 
 ### Wiring
 
@@ -94,6 +97,7 @@ Before deploying to hardware, the signal processing pipeline was validated in MA
 - Compute heart rate (BPM)
 
 ---
+<img width="1745" height="1238" alt="image" src="https://github.com/user-attachments/assets/95534394-f6f3-41a1-8a23-8ed0f82d48ef" />
 
 ### 🔁 Processing Pipeline
 
@@ -150,6 +154,7 @@ fprintf('Average BPM: %.2f\n', mean(bpm));
 - Validated pipeline before ESP32 deployment  
 
 ---
+<img width="1686" height="1194" alt="image" src="https://github.com/user-attachments/assets/67c3e81d-ed02-4157-874d-b435f62e7213" />
 
 ## 🤖 Machine Learning (Phase 2)
 
